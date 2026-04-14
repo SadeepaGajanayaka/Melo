@@ -58,32 +58,54 @@ class AiService {
 
   Future<String> getGeminiResponseFromVoice(
       String audioFilePath, List<Content> history) async {
-    debugPrint('🎙️ [AiService] Sending audio to Gemini: $audioFilePath');
-    final audioFile = File(audioFilePath);
-    final audioBytes = await audioFile.readAsBytes();
+    return _retry(() async {
+      debugPrint('🎙️ [AiService] Sending audio to Gemini: $audioFilePath');
+      final audioFile = File(audioFilePath);
+      final audioBytes = await audioFile.readAsBytes();
 
-    final chat = _model.startChat(history: List<Content>.from(history));
+      final chat = _model.startChat(history: List<Content>.from(history));
 
-    final content = Content.multi([
-      TextPart("The user said this. Listen and handle any requests or tasks."),
-      DataPart('audio/mp4', Uint8List.fromList(audioBytes)),
-    ]);
+      final content = Content.multi([
+        TextPart("The user said this. Listen and handle any requests or tasks."),
+        DataPart('audio/mp4', Uint8List.fromList(audioBytes)),
+      ]);
 
-    debugPrint('⏳ [AiService] Waiting for Gemini text response...');
-    var response = await chat.sendMessage(content);
-    
-    while (response.functionCalls.isNotEmpty) {
-      debugPrint('🛠️ [AiService] Handling tool calls...');
-      final responses = <FunctionResponse>[];
-      for (final call in response.functionCalls) {
-        final result = await _executeTool(call);
-        responses.add(FunctionResponse(call.name, result));
+      debugPrint('⏳ [AiService] Waiting for Gemini text response...');
+      var response = await chat.sendMessage(content);
+      
+      while (response.functionCalls.isNotEmpty) {
+        debugPrint('🛠️ [AiService] Handling tool calls...');
+        final responses = <FunctionResponse>[];
+        for (final call in response.functionCalls) {
+          final result = await _executeTool(call);
+          responses.add(FunctionResponse(call.name, result));
+        }
+        response = await chat.sendMessage(Content.functionResponses(responses));
       }
-      response = await chat.sendMessage(Content.functionResponses(responses));
-    }
 
-    debugPrint('✅ [AiService] Gemini responded successfully.');
-    return response.text ?? "My bad bro, something went wrong.";
+      debugPrint('✅ [AiService] Gemini responded successfully.');
+      return response.text ?? "My bad bro, something went wrong.";
+    });
+  }
+
+  Future<T> _retry<T>(Future<T> Function() action, {int maxAttempts = 3}) async {
+    int attempts = 0;
+    while (true) {
+      try {
+        attempts++;
+        return await action();
+      } catch (e) {
+        final errorStr = e.toString();
+        // Handle 500, 503, and other transient network errors
+        if (attempts < maxAttempts && (errorStr.contains('500') || errorStr.contains('503') || errorStr.contains('interrupted'))) {
+          final waitMs = attempts * 1000;
+          debugPrint('⚠️ [AiService] Request failed ($e). Retrying in ${waitMs}ms... (Attempt $attempts/$maxAttempts)');
+          await Future.delayed(Duration(milliseconds: waitMs));
+          continue;
+        }
+        rethrow;
+      }
+    }
   }
 
   Future<Map<String, dynamic>> _executeTool(FunctionCall call) async {
@@ -104,29 +126,33 @@ class AiService {
   }
 
   Future<File> textToSpeech(String text, String outputPath) async {
-    debugPrint('🗣️ [AiService] Requesting TTS from ElevenLabs for: "$text"');
-    var response = await http.post(
-      Uri.parse('$_elevenLabsUrl/text-to-speech/${AppConstants.voiceId}'),
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': AppConstants.elevenLabsApiKey,
-      },
-      body: jsonEncode({
-        'text': text,
-        'model_id': 'eleven_turbo_v2_5',
-        'voice_settings': {'stability': 0.5, 'similarity_boost': 0.75}
-      }),
-    );
+    return _retry(() async {
+      debugPrint('🗣️ [AiService] Requesting TTS from ElevenLabs for: "$text"');
+      var response = await http.post(
+        Uri.parse('$_elevenLabsUrl/text-to-speech/${AppConstants.voiceId}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': AppConstants.elevenLabsApiKey,
+        },
+        body: jsonEncode({
+          'text': text,
+          'model_id': 'eleven_turbo_v2_5',
+          'voice_settings': {'stability': 0.5, 'similarity_boost': 0.75}
+        }),
+      ).timeout(const Duration(seconds: 15));
 
-    if (response.statusCode == 200) {
-      debugPrint('✅ [AiService] TTS file received successfully.');
-      final file = File(outputPath);
-      await file.writeAsBytes(response.bodyBytes);
-      return file;
-    } else {
-      final errorPrefix = 'ElevenLabs Error ${response.statusCode}: ';
-      debugPrint('❌ [AiService] $errorPrefix ${response.body}');
-      throw Exception('$errorPrefix ${response.body}');
-    }
+      if (response.statusCode == 200) {
+        debugPrint('✅ [AiService] TTS file received successfully.');
+        final file = File(outputPath);
+        await file.writeAsBytes(response.bodyBytes);
+        return file;
+      } else if (response.statusCode == 500 || response.statusCode == 503) {
+        throw Exception('Server Error ${response.statusCode}');
+      } else {
+        final errorPrefix = 'ElevenLabs Error ${response.statusCode}: ';
+        debugPrint('❌ [AiService] $errorPrefix ${response.body}');
+        throw Exception('$errorPrefix ${response.body}');
+      }
+    });
   }
 }
