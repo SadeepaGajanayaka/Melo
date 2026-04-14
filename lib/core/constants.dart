@@ -1,8 +1,9 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class AppConstants {
-  // IMPORTANT: Do NOT hardcode keys here. 
-  // Paste your new keys into the .env file in the root directory.
-  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
-  static const String elevenLabsApiKey = String.fromEnvironment('ELEVENLABS_API_KEY');
+  // These are now loaded automatically from your .env file
+  static String get geminiApiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
+  static String get elevenLabsApiKey => dotenv.env['ELEVENLABS_API_KEY'] ?? '';
   static const String voiceId = 'hpp4J3VqNfWAUOO0d1Us'; 
   
   static const String systemPrompt = """
