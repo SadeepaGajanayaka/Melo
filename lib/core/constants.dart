@@ -1,9 +1,8 @@
 class AppConstants {
-  // Get this for FREE at: https://aistudio.google.com/
-  static const String geminiApiKey = 'AIzaSyDxXrx1eKVJxnlry0dp_DYMBDPipYnqyaY';
-
-  // ElevenLabs Voice ID (Keep free tier)
-  static const String elevenLabsApiKey = 'sk_ab6a5eaaedf71ceca31bac21dc91b15b220998b2c3a57ac7';
+  // IMPORTANT: Do NOT hardcode keys here. 
+  // Paste your new keys into the .env file in the root directory.
+  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+  static const String elevenLabsApiKey = String.fromEnvironment('ELEVENLABS_API_KEY');
   static const String voiceId = 'hpp4J3VqNfWAUOO0d1Us'; 
   
   static const String systemPrompt = """
