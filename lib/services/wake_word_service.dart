@@ -19,7 +19,7 @@ class WakeWordService {
   Future<void> init() async {
     print('🧩 [WakeWordService] Loading Vosk model...');
     try {
-      final modelPath = await ModelLoader().loadFromAssets('assets/models/vosk-model-small-en-us.zip');
+      final modelPath = await ModelLoader().loadFromAssets('assets/models/vosk-model-small-en-us.mp2');
       print('🧩 [WakeWordService] Model loaded from assets at: $modelPath');
       
       _model = await _vosk.createModel(modelPath);

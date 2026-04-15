@@ -76,7 +76,7 @@ flutter:
 
   assets:
     - .env
-    - assets/models/vosk-model-small-en-us.zip
+    - assets/models/vosk-model-small-en-us.mp2
     - assets/images/
 
 
