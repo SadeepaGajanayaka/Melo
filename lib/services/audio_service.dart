@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
@@ -30,7 +31,37 @@ class AudioService {
 
   Future<void> playAudio(String path) async {
     print('🔊 [AudioService] Playing audio from: $path');
+    
+    // Create a completer that resolves when playback finishes
+    final completer = Completer<void>();
+    
+    // Listen for playback completion
+    late final StreamSubscription sub;
+    sub = _player.onPlayerComplete.listen((_) {
+      if (!completer.isCompleted) {
+        print('🔊 [AudioService] Playback completed.');
+        completer.complete();
+      }
+      sub.cancel();
+    });
+    
+    // Also handle unexpected state changes (e.g. errors or stops)
+    late final StreamSubscription stateSub;
+    stateSub = _player.onPlayerStateChanged.listen((playerState) {
+      if (playerState == PlayerState.stopped && !completer.isCompleted) {
+        print('🔊 [AudioService] Playback stopped unexpectedly.');
+        completer.complete();
+        stateSub.cancel();
+      }
+    });
+    
     await _player.play(DeviceFileSource(path));
+    
+    // Wait until the audio actually finishes playing
+    await completer.future;
+    
+    // Clean up listeners
+    stateSub.cancel();
   }
 
   Future<void> stopPlayback() async {

@@ -55,7 +55,7 @@ class MeloNotifier extends StateNotifier<MeloState> {
   MeloNotifier(this._ai, this._audio) : super(MeloState()) {
     _wakeWord = WakeWordService(onWakeWordDetected: () {
       if (state.status == AppStatus.idle) {
-        startTalking();
+        startListening();
       }
     });
     _initWakeWord();
@@ -66,7 +66,7 @@ class MeloNotifier extends StateNotifier<MeloState> {
     await _wakeWord.start();
   }
 
-  Future<void> startTalking() async {
+  Future<void> startListening() async {
     await _wakeWord.stop(); 
     state = state.copyWith(status: AppStatus.recording);
     await _audio.startRecording();
@@ -122,11 +122,8 @@ class MeloNotifier extends StateNotifier<MeloState> {
 
       await _audio.playAudio(aiVoicePath);
       
-      Future.delayed(const Duration(seconds: 2), () async {
-        state = state.copyWith(status: AppStatus.idle);
-        await _wakeWord.start(); 
-      });
-      
+      state = state.copyWith(status: AppStatus.idle);
+      await _wakeWord.start(); 
     } catch (e) {
       debugPrint('🚨 [MeloNotifier] Fatal Error: $e');
       state = state.copyWith(

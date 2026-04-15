@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lottie/lottie.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Added back
 import 'state/melo_state.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized(); // Added back
+  
+  try {
+    await dotenv.load(fileName: ".env"); // Added back
+  } catch (e) {
+    debugPrint('⚠️ [Main] Error loading .env file: $e');
+  }
+  
   runApp(
     const ProviderScope(
       child: MeloApp(),
@@ -16,7 +21,6 @@ void main() async {
 }
 
 class MeloApp extends StatelessWidget {
-
   const MeloApp({super.key});
 
   @override
@@ -24,9 +28,11 @@ class MeloApp extends StatelessWidget {
     return MaterialApp(
       title: 'Melo',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F0F1A),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF1A1A2E),
         textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
+        useMaterial3: true,
       ),
       home: const HomeScreen(),
     );
@@ -38,10 +44,10 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final meloState = ref.watch(meloProvider);
+    final state = ref.watch(meloProvider);
     final meloNotifier = ref.read(meloProvider.notifier);
 
-    // Listen for errors and show SnackBar
+    // Global Error Listening
     ref.listen<MeloState>(meloProvider, (previous, next) {
       if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -65,127 +71,95 @@ class HomeScreen extends ConsumerWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1A1A2E),
-              Color(0xFF0F0F1A),
-            ],
+            colors: [Color(0xFF1E1E3F), Color(0xFF1A1A2E)],
           ),
         ),
         child: SafeArea(
-          child: Stack(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Top Vibe Text
-              Positioned(
-                top: 40,
-                left: 0,
-                right: 0,
-                child: Column(
-                  children: [
-                    Text(
-                      _getStatusText(meloState.status),
-                      style: GoogleFonts.outfit(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        meloState.status == AppStatus.idle 
-                          ? "Hey bro, I'm listening..." 
-                          : (meloState.status == AppStatus.responding ? meloState.lastAiText : ""),
-                        textAlign: TextAlign.center,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          color: Colors.white60,
-                        ),
-                      ),
-                    ),
-                  ],
+              Text(
+                'MELO',
+                style: GoogleFonts.outfit(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
                 ),
               ),
-
-              // Central Interactive Orb
+              const SizedBox(height: 20),
+              Text(
+                _getStatusText(state.status),
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  color: Colors.white70,
+                ),
+              ),
+              const Spacer(),
+              
+              // Central Orb UI
               Center(
-                child: GestureDetector(
-                  onTap: () {
-                    if (meloState.status == AppStatus.idle) {
-                      meloNotifier.startTalking();
-                    } else if (meloState.status == AppStatus.recording) {
-                      meloNotifier.stopTalkingAndProcess();
-                    }
-                  },
-                  child: AnimatedContainer(
-
-                    duration: const Duration(milliseconds: 300),
-                    height: 220,
-                    width: 220,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: _getStatusColor(meloState.status).withOpacity(0.3),
-                          blurRadius: 40,
-                          spreadRadius: 10,
-                        ),
-                      ],
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Outer glow
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 500),
+                      height: 250,
+                      width: 250,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: _getStatusColor(state.status).withOpacity(0.35),
+                            blurRadius: 50,
+                            spreadRadius: 20,
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Dynamic Orb Background
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                _getStatusColor(meloState.status).withOpacity(0.8),
-                                _getStatusColor(meloState.status).withOpacity(0.2),
-                              ],
-                            ),
+                    
+                    // The Interactive Orb
+                    GestureDetector(
+                      onLongPressStart: (_) => meloNotifier.startListening(),
+                      onLongPressEnd: (_) => meloNotifier.stopTalkingAndProcess(),
+                      onTap: () {
+                        if (state.status == AppStatus.idle) {
+                          meloNotifier.startListening();
+                        } else {
+                          meloNotifier.stopTalkingAndProcess();
+                        }
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        height: 220,
+                        width: 220,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                            width: 2,
                           ),
                         ),
-                        
-                        // Lottie / Animation based on status
-                        _buildStatusAnimation(meloState.status),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Bottom Hint
-              Positioned(
-                bottom: 60,
-                left: 0,
-                right: 0,
-                child: Column(
-                  children: [
-                    const Icon(Icons.mic, color: Colors.white70, size: 30),
-                    const SizedBox(height: 10),
-                    Text(
-                      "Tap to Talk",
-                      style: GoogleFonts.outfit(
-                        fontSize: 14,
-                        color: Colors.white38,
-                        letterSpacing: 2,
+                        child: _buildOrbContent(state.status),
                       ),
                     ),
-                    Text(
-                      "(Auto-stops when you're quiet)",
-                      style: GoogleFonts.outfit(
-                        fontSize: 10,
-                        color: Colors.white24,
-                      ),
-                    ),
-
                   ],
                 ),
               ),
+              
+              const Spacer(),
+              
+              const Icon(Icons.mic, color: Colors.white54),
+              const SizedBox(height: 10),
+              Text(
+                'Tap to Talk',
+                style: GoogleFonts.outfit(color: Colors.white38),
+              ),
+              const Text(
+                '(Auto-stops when you\'re quiet)',
+                style: TextStyle(fontSize: 10, color: Colors.white24),
+              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -195,36 +169,27 @@ class HomeScreen extends ConsumerWidget {
 
   String _getStatusText(AppStatus status) {
     switch (status) {
-      case AppStatus.idle: return "MELO";
-      case AppStatus.recording: return "LISTENING";
-      case AppStatus.thinking: return "THINKING";
-      case AppStatus.responding: return "MELO";
+      case AppStatus.idle: return 'Hey bro, I\'m listening...';
+      case AppStatus.recording: return 'Listening...';
+      case AppStatus.thinking: return 'Thinking...';
+      case AppStatus.responding: return 'Melo is speaking...';
     }
   }
 
   Color _getStatusColor(AppStatus status) {
     switch (status) {
       case AppStatus.idle: 
-        return Colors.deepPurpleAccent; // Original / Listening
+        return Colors.deepPurpleAccent;
       case AppStatus.recording: 
-        return Colors.deepPurpleAccent; // "Listening make it just as now"
+        return Colors.deepPurpleAccent;
       case AppStatus.thinking: 
-        return Colors.redAccent;         // "Thinking make it red"
+        return Colors.redAccent;
       case AppStatus.responding: 
-        return Colors.greenAccent;       // "Talking make it green"
+        return Colors.greenAccent;
     }
   }
 
-  Widget _buildStatusAnimation(AppStatus status) {
-    double scale = 1.0;
-    double opacity = 0.9;
-    
-    // Add dynamic effects based on status
-    if (status == AppStatus.recording) {
-      scale = 1.1; // Pulsing effect would be handled by a parent scale animation if possible, 
-                   // but for now we set a base scale
-    }
-
+  Widget _buildOrbContent(AppStatus status) {
     return AnimatedScale(
       scale: status == AppStatus.recording ? 1.1 : 1.0,
       duration: const Duration(milliseconds: 500),
@@ -235,8 +200,8 @@ class HomeScreen extends ConsumerWidget {
         child: ClipOval(
           child: ColorFiltered(
             colorFilter: ColorFilter.mode(
-              _getStatusColor(status),
-              BlendMode.modulate,
+              _getStatusColor(status).withOpacity(0.8),
+              BlendMode.srcATop,
             ),
             child: Image.asset(
               'assets/images/melo_orb-bg-normal.png',
